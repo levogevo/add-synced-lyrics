@@ -247,14 +247,14 @@ set_lyric_file_name() {
 is_valid_lrc() {
     local file="$1"
 
-    test -f "${file}" || return 1
-
-    local valid=0
+    local valid=1
     while read -r line; do
+        [[ "${#line}" -eq 0 ]] && continue
         if [[ "${line}" != '['* ]]; then
             valid=1
             break
         fi
+        valid=0
     done <"${file}"
 
     return ${valid}
