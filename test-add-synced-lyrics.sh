@@ -7,8 +7,12 @@ set -u
 
 readonly THIS_DIR="$(dirname "$(readlink -f "$0")")"
 readonly TEST_DIR="${THIS_DIR}/test-dir"
-readonly TEST_FILE_1="${TEST_DIR}/03 - Back Burner.opus"
-readonly TEST_FILE_2="${TEST_DIR}/subdir/05 - Composure.opus"
+# lyrics exist for this song
+readonly GOOD_SONG="${TEST_DIR}/back burner.opus"
+readonly GOOD_LYRICS="${GOOD_SONG//.opus/.lrc}"
+# lyrics do not exist for this song
+readonly BAD_SONG="${TEST_DIR}/subdir/avalanche.opus"
+readonly BAD_LYRICS="${BAD_SONG//.opus/.lrc}"
 readonly PROG="${THIS_DIR}/add-synced-lyrics.sh"
 
 test_bad_input() {
@@ -59,31 +63,42 @@ test_determine_inputs_recurse() {
 }
 
 test_file_dry() {
-    "${PROG}" --file "${TEST_FILE_1}" --dry-run || return 1
-
-    return 0
+    "${PROG}" --file "${GOOD_SONG}" --dry-run
 }
 
 test_directory_dry() {
-    "${PROG}" --dir "${TEST_DIR}" --dry-run || return 1
-
-    return 0
+    "${PROG}" --dir "${TEST_DIR}" --dry-run
 }
 
 test_directory_recurse_dry() {
-    "${PROG}" --dir "${TEST_DIR}" --recurse --dry-run || return 1
+    "${PROG}" --dir "${TEST_DIR}" --recurse --dry-run
+}
+
+test_good_file() {
+    "${PROG}" --file "${GOOD_SONG}" || return 1
+    test -f "${GOOD_LYRICS}"
+}
+
+test_bad_file() {
+    "${PROG}" --file "${BAD_SONG}" && return 1
+    ! test -f "${BAD_LYRICS}"
+}
+
+test_directory_recurse() {
+    setup_test_data || return 1
+    # this test should fail since it includes the bad file
+    "${PROG}" --dir "${TEST_DIR}" --recurse && return 1
 
     return 0
 }
 
-test_file() {
-    "${PROG}" --file "${TEST_FILE_1}" || return 1
-    test -f "${TEST_FILE_1//.opus/.lrc}"
-}
+test_directory_recurse_ignore() {
+    setup_test_data || return 1
+    "${PROG}" --dir "${TEST_DIR}" --recurse --ignore && return 1
+    test -f "${GOOD_LYRICS}" || return 1
+    test -f "${BAD_LYRICS}" && return 1
 
-test_directory_recurse() {
-    "${PROG}" --dir "${TEST_DIR}" --recurse || return 1
-    test -f "${TEST_FILE_2//.opus/.lrc}"
+    return 0
 }
 
 setup_test_data() {
@@ -96,15 +111,13 @@ setup_test_data() {
         -i anullsrc=channel_layout=stereo:sample_rate=48000
         -c:a libopus
         -t 5
-        -metadata ALBUM="Messengers"
-        -metadata ARTIST="August Burns Red"
     )
     "${ffmpegCmd[@]}" \
-        -metadata TITLE="Back Burner" \
-        "${TEST_FILE_1}" || return 1
+        -metadata ISRC=USTN10700139 \
+        "${GOOD_SONG}" || return 1
     "${ffmpegCmd[@]}" \
-        -metadata TITLE="Composure" \
-        "${TEST_FILE_2}" || return 1
+        -metadata ISRC=US5261822978 \
+        "${BAD_SONG}" || return 1
 }
 
 TESTS=(
@@ -115,8 +128,10 @@ TESTS=(
     test_directory_dry
     test_directory_recurse_dry
     test_file_dry
-    test_file
+    test_good_file
+    test_bad_file
     test_directory_recurse
+    test_directory_recurse_ignore
 )
 
 # make sure no test is accidentally missed
@@ -135,6 +150,7 @@ for test in "${TESTS[@]}"; do
             "${test}"
         ) 2>&1
     )"; then
+        echo
         echo "!! ${test} failed !!"
         echo "${testOutput}"
         exit 1
