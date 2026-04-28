@@ -19,11 +19,11 @@ get_lrclib_api_response() {
         IFS=' ' read -r env jqFilter <<<"${data}"
         jqResult="$(jq -r "${jqFilter}" <<<"${deezerResponse}")"
         if ! jq_result_valid "${jqResult}"; then
-            error "could not determine lrclib ${env} for ${isrc}"
+            echo_fail "could not determine lrclib ${env} for ${isrc}"
             return 1
         fi
         declare "${env}=${jqResult}"
-        debug "${env}=${jqResult}"
+        debug echo_debug "${env}=${jqResult}"
     done
 
     # variables assigned above
@@ -48,7 +48,7 @@ download_with_lrclib() {
     lrclibResponse="$(get_lrclib_api_response "${isrc}")"
     syncedLyrics="$(jq -r .syncedLyrics <<<"${lrclibResponse}")"
     if ! jq_result_valid "${syncedLyrics}"; then
-        error "could not get lyrics for ${isrc}"
+        debug echo_fail "could not find lyrics for ${isrc}"
         return 1
     fi
 

@@ -20,29 +20,48 @@ jq_result_valid() {
     return 0
 }
 
-stderr() { echo "$*" 1>&2; }
-info() { stderr "INFO [${FUNCNAME[1]}]: $*"; }
-error() { stderr "ERROR [${FUNCNAME[1]}]: $*"; }
+# ANSI colors
+readonly RED='\e[0;31m'
+readonly GREEN='\e[0;32m'
+readonly PURPLE='\e[0;35m'
+readonly YELLOW='\e[0;33m'
+readonly CYAN='\e[0;36m'
+readonly NC='\e[0m'
 
-# only echo "$@" if ${DEBUG} is true
+stderr() {
+    local word="${WORD:-}"
+    local color="${COLOR:-}"
+    local function="${FUNCNAME[2]}"
+    if [[ "${function}" =~ void ]]; then
+        function="${FUNCNAME[3]}"
+    fi
+    echo \
+        -e \
+        "${color}${word}${NC}" \
+        "[${function}]" \
+        "$@" 1>&2
+}
+echo_info() { WORD=INFO COLOR="${CYAN}" stderr "$@"; }
+echo_fail() { WORD=FAIL COLOR="${RED}" stderr "$@"; }
+echo_pass() { WORD=PASS COLOR="${GREEN}" stderr "$@"; }
+echo_dbug() { WORD=DBUG COLOR="${PURPLE}" stderr "$@"; }
+
+# only perform the command given if ${DEBUG} is enabled
 debug() {
     if [[ ${DEBUG} == false ]]; then
         return 0
     fi
 
-    stderr "$@"
+    "$@"
 }
 
-# do not do anything
-# if ${DRY_RUN} is enabled
+# only perform the command given if ${DRY_RUN} is enabled
 void() {
-    local cmd=("$@")
     if [[ ${DRY_RUN} == true ]]; then
         return 0
-    else
-        "${cmd[@]}"
-        return $?
     fi
+
+    "$@"
 }
 
 # print out "$@" formatted for bash
@@ -80,7 +99,7 @@ check_required_utils() {
     local missing=false
     for util in "${utils[@]}"; do
         if ! have_cmd "${util}"; then
-            error "missing ${util}!"
+            echo_fail "missing ${util}!"
             missing=true
         fi
     done
@@ -127,8 +146,8 @@ create_tmp_dir() {
 check_tmp_dir_empty() {
     for f in "${TMPDIR}"/*; do
         if [[ -f "${f}" ]]; then
-            error "tempdir ${TMPDIR} is not empty!"
-            error "aborting operation"
+            echo_fail "tempdir ${TMPDIR} is not empty!"
+            echo_fail "aborting operation"
             return 1
         fi
     done
@@ -157,7 +176,7 @@ librelyrics_dl() {
     done
 
     if [[ ${librelyricsRet} -eq 0 && -z ${downloadedFile} ]]; then
-        error "failed to download file for ${url} despite no librelyrics error"
+        echo_fail "failed to download file for ${url} despite no librelyrics error"
         return 1
     fi
 
@@ -168,7 +187,7 @@ librelyrics_dl() {
     fi
 
     if [[ ${librelyricsRet} -eq 0 && -z ${fileContents} ]]; then
-        error "failed to read file for ${url} despite no librelyrics error"
+        echo_fail "failed to read file for ${url} despite no librelyrics error"
         return 1
     fi
 
@@ -181,7 +200,7 @@ download_with_librelyrics() {
     local urlType="$3"
 
     if [[ ! "${urlType}" =~ spotify|deezer ]]; then
-        error "only spotify|deezer are supported"
+        echo_fail "only spotify|deezer are supported"
         return 1
     fi
 
@@ -194,11 +213,11 @@ download_with_librelyrics() {
         "${url}")"
 
     if [[ -z "${lyrics}" ]]; then
-        error "could not get lyrics for ${isrc} using ${urlType}"
+        debug echo_fail "could not find lyrics for ${isrc} using ${urlType}"
         return 1
     fi
 
-    info "found lyrics for ${isrc} with ${urlType}"
+    debug echo_info "found lyrics for ${isrc} with ${urlType}"
     echo "${lyrics}" >"${output}"
 }
 
@@ -228,7 +247,7 @@ get_file_isrc() {
     jqResult="$(jq -r "${jqFilter}" <<<"${probe}")"
 
     if [[ "${jqResult}" == 'null' ]]; then
-        error "failed to find ISRC for ${file}"
+        echo_fail "could not find ISRC for ${file}"
         return 1
     fi
     echo "${jqResult}"

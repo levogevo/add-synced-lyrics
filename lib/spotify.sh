@@ -6,7 +6,7 @@
 get_spotify_url() {
     local isrc="$1"
     if [[ -z "${isrc}" ]]; then
-        error "missing isrc"
+        echo_fail "missing isrc"
         return 1
     fi
 
@@ -41,7 +41,7 @@ get_spotify_url() {
 
         for tag in "${tags[@]}"; do
             declare -n spotifyTagValue="${tag}"
-            debug "${tag}=${spotifyTagValue}"
+            debug echo_debug "${tag}=${spotifyTagValue}"
         done
 
         # shellcheck disable=SC2154
@@ -52,7 +52,7 @@ get_spotify_url() {
     done <<<"${jqOutput}"
 
     if [[ "${foundMatching}" == false ]]; then
-        error "could not find matching spotify track for ${isrc}"
+        debug echo_fail "could not find matching spotify track for ${isrc}"
         return 1
     fi
 

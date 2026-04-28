@@ -58,14 +58,18 @@ process_inputs() {
         download_with_deezer
     )
 
-    for input in "${INPUTS[@]}"; do
+    local numInputs="${#INPUTS[@]}"
+    for ((i = 0; i < numInputs; i++)); do
         if [[ ${IGNORE} == false && ${ret} -ne 0 ]]; then
             return 1
         fi
 
+        local input="${INPUTS[${i}]}"
+        echo_info "processing $((i + 1))/${numInputs}: ${input}"
+
         if [[ "${input,,}" == *'instrumental'* ||
             "${input,,}" == *'acoustic'* ]]; then
-            echo "${input} is instrumental, skipping"
+            echo_pass "${input} is instrumental, skipping"
             continue
         fi
 
@@ -74,13 +78,13 @@ process_inputs() {
 
         if [[ -f "${output}" ]]; then
             if is_valid_lrc "${output}"; then
+                echo_pass "${input} already has lyrics, skipping"
                 continue
             else
                 rm "${output}" || return 1
             fi
         fi
 
-        echo "processing ${input}"
         isrc=''
         if ! isrc="$(get_file_isrc "${input}")"; then
             ret=1
@@ -101,11 +105,11 @@ process_inputs() {
         fi
 
         if ! void test -f "${output}"; then
-            echo "failed to get lyrics for ${input}"
+            echo_fail "could not find lyrics for ${input}"
             ret=1
             continue
         else
-            void echo "added lyrics for ${input}"
+            void echo_pass "added lyrics for ${input}"
         fi
     done
 

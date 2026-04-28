@@ -6,7 +6,7 @@
 get_deezer_isrc_response() {
     local isrc="$1"
     if [[ -z "${isrc}" ]]; then
-        error "missing isrc"
+        echo_fail "missing isrc"
         return 1
     fi
 
@@ -20,7 +20,7 @@ get_deezer_isrc_response() {
 get_deezer_url() {
     local isrc="$1"
     if [[ -z "${isrc}" ]]; then
-        error "missing isrc"
+        echo_fail "missing isrc"
         return 1
     fi
 
@@ -31,7 +31,7 @@ get_deezer_url() {
     jqResult="$(jq -r .link <<<"${deezerResponse}")"
 
     if ! jq_result_valid "${jqResult}"; then
-        error "could not get link from deezer for ${isrc}"
+        echo_fail "could not find link from deezer for ${isrc}"
         return 1
     fi
 
