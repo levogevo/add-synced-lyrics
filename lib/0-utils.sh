@@ -32,7 +32,7 @@ stderr() {
     local word="${WORD:-}"
     local color="${COLOR:-}"
     local function="${FUNCNAME[2]}"
-    if [[ "${function}" =~ void ]]; then
+    if [[ "${function}" =~ debug|void ]]; then
         function="${FUNCNAME[3]}"
     fi
     echo \
@@ -44,7 +44,7 @@ stderr() {
 echo_info() { WORD=INFO COLOR="${CYAN}" stderr "$@"; }
 echo_fail() { WORD=FAIL COLOR="${RED}" stderr "$@"; }
 echo_pass() { WORD=PASS COLOR="${GREEN}" stderr "$@"; }
-echo_dbug() { WORD=DBUG COLOR="${PURPLE}" stderr "$@"; }
+echo_debug() { WORD=DBUG COLOR="${PURPLE}" stderr "$@"; }
 
 # only perform the command given if ${DEBUG} is enabled
 debug() {
@@ -111,6 +111,20 @@ check_required_utils() {
     fi
 }
 
+echo_if_fail() {
+    local cmd=("$@")
+    local output
+    output="$("${cmd[@]}" 2>&1)"
+    local ret=$?
+
+    if [[ ${ret} -ne 0 ]]; then
+        echo_fail "${cmd[*]}"
+        echo_fail "${output}"
+    fi
+
+    return ${ret}
+}
+
 cache_command() {
     local cmd=("$@")
     local hash cacheFile cmdOut contents ret
@@ -149,8 +163,10 @@ check_tmp_dir_empty() {
     for f in "${TMPDIR}"/*; do
         if [[ -f "${f}" ]]; then
             echo_fail "tempdir ${TMPDIR} is not empty!"
+            echo_fail "contains ${f}"
             echo_fail "aborting operation"
-            return 1
+            # execution becomes undefined if TMPDIR is not empty
+            exit 1
         fi
     done
 
@@ -255,10 +271,43 @@ get_file_isrc() {
     echo "${jqResult}"
 }
 
+get_file_lyrics() {
+    local file="$1"
+    local probe='' jqResult=''
+
+    local probe=''
+    probe="$(
+        ffprobe \
+            -v error \
+            -show_entries stream \
+            -of json \
+            "${file}"
+    )" || return 1
+
+    local jqFilter='.streams[] | select(.codec_type == "audio") | .tags | with_entries(.key |= ascii_downcase) | .lyrics'
+    jqResult="$(jq -r "${jqFilter}" <<<"${probe}")"
+
+    if [[ "${jqResult}" == 'null' ]]; then
+        debug echo_fail "could not find lyrics for ${file}"
+        return 1
+    fi
+    echo "${jqResult}"
+}
+
+is_music_file() {
+    local file="$1"
+    [[ "${file}" =~ ${MUSIC_EXTENSION_REGEX} ]]
+}
+
+is_lrc_file() {
+    local file="$1"
+    [[ "${file}" == *'.lrc' ]]
+}
+
 set_lyric_file_name() {
     local file="$1"
-    if [[ ! "${file}" =~ ${MUSIC_EXTENSION_REGEX} ]]; then
-        echo "${file} is not a music file"
+    if ! is_music_file "${file}"; then
+        echo_fail "${file} is not a music file"
         return 1
     fi
 
@@ -268,19 +317,27 @@ set_lyric_file_name() {
 validate_lrc() {
     local file="$1"
 
-    # file does not exist, is invalid
+    # file does not exist, invalid
     if [[ ! -f "${file}" ]]; then
         return 1
     fi
 
-    local valid=0
-    while read -r line; do
+    # file is not lyric file, invalid
+    if ! is_lrc_file "${file}"; then
+        return 1
+    fi
+
+    mapfile -t fileContents <"${file}"
+
+    local valid=1
+    for line in "${fileContents[@]}"; do
         [[ "${#line}" -eq 0 ]] && continue
         if [[ "${line}" != '['* && "${line}" != '#'* ]]; then
             valid=1
             break
         fi
-    done <"${file}"
+        valid=0
+    done
 
     if [[ ${valid} -eq 1 ]]; then
         debug echo_fail "${file} is not valid lrc file"
@@ -288,4 +345,60 @@ validate_lrc() {
     fi
 
     return ${valid}
+}
+
+validate_song_lyrics() {
+    local songFile="$1"
+    local lyricsDestination="$2"
+
+    # embed or not both get validated
+    validate_lrc "${lyricsDestination}"
+    local validateDestination=$?
+
+    # only continue to validate for embed
+    if [[ ${EMBED} == false ]]; then
+        return ${validateDestination}
+    fi
+
+    local tmpLyricsFile="${TMPDIR}/$(bash_basename "${lyricsDestination}")"
+    get_file_lyrics "${songFile}" >"${tmpLyricsFile}"
+    validate_lrc "${tmpLyricsFile}"
+    local validateRet=$?
+    [[ ${validateRet} -eq 0 ]] && rm "${tmpLyricsFile}"
+
+    return ${validateRet}
+}
+
+add_lyrics_to_song() {
+    local songFile="$1"
+    local lyricsToAdd="$2"
+    local lyricsDestination="$3"
+
+    # this function removes file so be extra certain
+    is_music_file "${songFile}" &&
+        is_lrc_file "${lyricsToAdd}" &&
+        is_lrc_file "${lyricsDestination}" || return 1
+
+    if [[ ${EMBED} == false ]]; then
+        mv "${lyricsToAdd}" "${lyricsDestination}" &>/dev/null
+        return $?
+    fi
+
+    local tmpSongFile="${TMPDIR}/$(bash_basename "${songFile}")"
+    echo_if_fail \
+        ffmpeg \
+        -hide_banner \
+        -i "${songFile}" \
+        -metadata "LYRICS=$(<"${lyricsToAdd}")" \
+        -c copy \
+        "${tmpSongFile}"
+    local ffmpegRet=$?
+    rm "${lyricsToAdd}"
+
+    if [[ ${ffmpegRet} -eq 0 ]]; then
+        mv "${tmpSongFile}" "${songFile}" &>/dev/null || return 1
+        if [[ -f "${lyricsDestination}" ]]; then
+            rm "${lyricsDestination}" || return 1
+        fi
+    fi
 }

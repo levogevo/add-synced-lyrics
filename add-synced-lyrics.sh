@@ -74,9 +74,13 @@ process_inputs() {
         fi
 
         output=''
-        output="$(set_lyric_file_name "${input}")"
+        if ! output="$(set_lyric_file_name "${input}")"; then
+            echo_fail "could not determine lyric file name for ${input}"
+            ret=1
+            continue
+        fi
 
-        if validate_lrc "${output}"; then
+        if validate_song_lyrics "${input}" "${output}"; then
             echo_pass "${input} already has lyrics, skipping"
             continue
         fi
@@ -87,7 +91,7 @@ process_inputs() {
             continue
         fi
 
-        local tmpOutput="${TMPDIR}/tmp.lrc"
+        local tmpOutput="${TMPDIR}/$(bash_basename "${output}")"
         for func in "${downloadFuncs[@]}"; do
             # try to download
             if ! "${func}" "${isrc}" "${tmpOutput}"; then
@@ -105,8 +109,11 @@ process_inputs() {
         [[ ${DRY_RUN} == true ]] && continue
 
         if [[ -f "${tmpOutput}" ]]; then
-            mv "${tmpOutput}" "${output}" &>/dev/null || return 1
-            echo_pass "added lyrics for ${input}"
+            add_lyrics_to_song \
+                "${input}" \
+                "${tmpOutput}" \
+                "${output}" &&
+                echo_pass "added lyrics for ${input}"
         else
             echo_fail "could not find lyrics for ${input}"
             ret=1

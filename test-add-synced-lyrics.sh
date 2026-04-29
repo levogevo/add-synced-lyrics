@@ -74,7 +74,7 @@ run_test_cmd() {
     fi
 
     local output
-    output="$("${cmd[@]}")"
+    output="$("${cmd[@]}" 2>&1)"
     local actualRetval=$?
 
     declare -g CMD_OUTPUT="${output}"
@@ -86,6 +86,10 @@ run_test_cmd() {
         return 0
     fi
 
+}
+
+test_help_option() {
+    add-synced-lyrics --help
 }
 
 test_bad_input() {
@@ -113,6 +117,11 @@ test_bad_input() {
     run_test_cmd \
         1 \
         add-synced-lyrics --file "${PROGPATH}" --dir "${PROGDIR}" --recurse
+
+    # non-existent flag
+    run_test_cmd \
+        1 \
+        add-synced-lyrics --this-flag-does-not-exist
 
     return 0
 }
@@ -174,23 +183,43 @@ test_determine_inputs_find_recurse() {
 }
 
 test_file_dry() {
+    setup_test_data
     add-synced-lyrics --file "${GOOD_SONG}" --dry-run
 }
 
 test_directory_dry() {
+    setup_test_data
     add-synced-lyrics --dir "${TEST_DIR}" --dry-run
 }
 
 test_directory_recurse_dry() {
+    setup_test_data
     add-synced-lyrics --dir "${TEST_DIR}" --recurse --dry-run
 }
 
 test_good_file() {
+    setup_test_data
     add-synced-lyrics --file "${GOOD_SONG}" --debug
     test -f "${GOOD_LYRICS}"
 }
 
+test_good_file_embed() {
+    test_good_file
+    # rm "${GOOD_LYRICS}"
+    add-synced-lyrics --file "${GOOD_SONG}" --embed
+    run_test_cmd \
+        1 \
+        test -f "${GOOD_LYRICS}"
+
+    # do it again to test that embedded is picked up and valid
+    run_test_cmd \
+        0 \
+        add-synced-lyrics --file "${GOOD_SONG}" --embed
+    [[ "${CMD_OUTPUT}" == *'already has lyrics, skipping'* ]]
+}
+
 test_bad_file() {
+    setup_test_data
     run_test_cmd \
         1 \
         add-synced-lyrics \
@@ -248,6 +277,7 @@ setup_test_data() {
 }
 
 TESTS=(
+    test_help_option
     test_determine_inputs
     test_determine_inputs_recurse
     test_determine_inputs_find
@@ -257,6 +287,7 @@ TESTS=(
     test_directory_recurse_dry
     test_file_dry
     test_good_file
+    test_good_file_embed
     test_bad_file
     test_directory_recurse
     test_directory_recurse_ignore
@@ -376,5 +407,6 @@ if [[ $# -eq 0 ]]; then
     echo
     analyze_coverage
 else
+    setup_coverage
     "$@"
 fi

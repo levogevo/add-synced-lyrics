@@ -10,14 +10,15 @@ OPTIONS:
   -d, --dir       process files in directory
   -r, --recurse   recursively process directory
   -f, --file      process one file
+  -e, --embed     embed lyrics directly into the song file
   -n, --dry-run   do not add synced lyrics,
                   just show the files that would be processed
-  -e, --eval      output bash functions that can be directly processed
-                  by eval for use with testing this script.
   -i, --ignore    ignore errors, and continue attempting to find lyrics
                   even in the case of errors
   -h, --help      show this output
-  --debug         extra information useful for debugging"
+  --debug         extra information useful for debugging
+  --eval          output bash functions that can be directly processed
+                  by eval for use with testing this script."
     exit "${EXIT_CODE:-1}"
 }
 
@@ -27,6 +28,7 @@ set_default_options() {
     RECURSE=${RECURSE:-false}
     DRY_RUN=${DRY_RUN:-false}
     IGNORE=${IGNORE:-false}
+    EMBED=${EMBED:-false}
     DEBUG=${DEBUG:-false}
 
     # cache
@@ -64,13 +66,9 @@ process_options() {
             readonly IGNORE=true
             shift 1
             ;;
-        --debug)
-            readonly DEBUG=true
+        -e | --embed)
+            readonly EMBED=true
             shift 1
-            ;;
-        -e | --eval)
-            output_eval_functions
-            exit 0
             ;;
         -f | --file)
             if [[ ! -f "${value}" ]]; then
@@ -79,6 +77,14 @@ process_options() {
             fi
             readonly FILE="${value}"
             shift 2
+            ;;
+        --debug)
+            readonly DEBUG=true
+            shift 1
+            ;;
+        --eval)
+            output_eval_functions
+            exit 0
             ;;
         -h | --help)
             EXIT_CODE=0 usage
