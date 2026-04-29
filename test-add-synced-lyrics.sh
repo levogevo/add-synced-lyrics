@@ -149,6 +149,30 @@ test_determine_inputs_recurse() {
     RECURSE=true test_determine_inputs
 }
 
+test_determine_inputs_find() {
+    local utils=(
+        base64
+        cat
+        ffprobe
+        jq
+        librelyrics
+        spotify
+    )
+    local path=()
+    for util in "${utils[@]}"; do
+        path+=("$(bash_dirname "$(command -v "${util}")")")
+    done
+    IFS=':' moddedPath="${path[*]}"
+    PATH="${moddedPath}" \
+        add-synced-lyrics \
+        --dir "${TEST_DIR}" \
+        --dry-run "$@"
+}
+
+test_determine_inputs_find_recurse() {
+    test_determine_inputs_find --recurse
+}
+
 test_file_dry() {
     add-synced-lyrics --file "${GOOD_SONG}" --dry-run
 }
@@ -162,14 +186,16 @@ test_directory_recurse_dry() {
 }
 
 test_good_file() {
-    add-synced-lyrics --file "${GOOD_SONG}"
+    add-synced-lyrics --file "${GOOD_SONG}" --debug
     test -f "${GOOD_LYRICS}"
 }
 
 test_bad_file() {
     run_test_cmd \
         1 \
-        add-synced-lyrics --file "${BAD_SONG}"
+        add-synced-lyrics \
+        --file "${BAD_SONG}" \
+        --debug
     run_test_cmd \
         1 \
         test -f "${BAD_LYRICS}"
@@ -196,6 +222,12 @@ test_directory_recurse_ignore() {
     return 0
 }
 
+test_missing_utils() {
+    PATH="$(bash_dirname "$(command -v bash)")" run_test_cmd \
+        1 \
+        add-synced-lyrics
+}
+
 setup_test_data() {
     test -d "${TEST_DIR}" && rm -rf "${TEST_DIR}"
     mkdir -p "${TEST_DIR}/subdir"
@@ -218,6 +250,8 @@ setup_test_data() {
 TESTS=(
     test_determine_inputs
     test_determine_inputs_recurse
+    test_determine_inputs_find
+    test_determine_inputs_find_recurse
     test_bad_input
     test_directory_dry
     test_directory_recurse_dry
@@ -226,6 +260,7 @@ TESTS=(
     test_bad_file
     test_directory_recurse
     test_directory_recurse_ignore
+    test_missing_utils
 )
 
 # make sure no test is accidentally missed
@@ -338,6 +373,7 @@ if [[ $# -eq 0 ]]; then
         fi
     done
 
+    echo
     analyze_coverage
 else
     "$@"

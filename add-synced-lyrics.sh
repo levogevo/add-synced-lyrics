@@ -76,13 +76,9 @@ process_inputs() {
         output=''
         output="$(set_lyric_file_name "${input}")"
 
-        if [[ -f "${output}" ]]; then
-            if is_valid_lrc "${output}"; then
-                echo_pass "${input} already has lyrics, skipping"
-                continue
-            else
-                rm "${output}" || return 1
-            fi
+        if validate_lrc "${output}"; then
+            echo_pass "${input} already has lyrics, skipping"
+            continue
         fi
 
         isrc=''
@@ -93,24 +89,29 @@ process_inputs() {
 
         local tmpOutput="${TMPDIR}/tmp.lrc"
         for func in "${downloadFuncs[@]}"; do
-            "${func}" "${isrc}" "${tmpOutput}" && break
+            # try to download
+            if ! "${func}" "${isrc}" "${tmpOutput}"; then
+                continue
+            fi
+
+            # validate
+            if validate_lrc "${tmpOutput}"; then
+                # passed download and validation, stop processing
+                break
+            fi
         done
 
-        if [[ -f "${tmpOutput}" ]]; then
-            if is_valid_lrc "${tmpOutput}"; then
-                mv "${tmpOutput}" "${output}" &>/dev/null || return 1
-            else
-                rm "${tmpOutput}" || return 1
-            fi
-        fi
+        # skip processing since no files should be modified
+        [[ ${DRY_RUN} == true ]] && continue
 
-        if ! void test -f "${output}"; then
+        if [[ -f "${tmpOutput}" ]]; then
+            mv "${tmpOutput}" "${output}" &>/dev/null || return 1
+            echo_pass "added lyrics for ${input}"
+        else
             echo_fail "could not find lyrics for ${input}"
             ret=1
-            continue
-        else
-            void echo_pass "added lyrics for ${input}"
         fi
+
     done
 
     return ${ret}

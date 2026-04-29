@@ -55,7 +55,7 @@ debug() {
     "$@"
 }
 
-# only perform the command given if ${DRY_RUN} is enabled
+# only perform the command given if ${DRY_RUN} is disabled
 void() {
     if [[ ${DRY_RUN} == true ]]; then
         return 0
@@ -138,6 +138,8 @@ cache_command() {
 }
 
 create_tmp_dir() {
+    [[ -n "${TMPDIR:-}" ]] && return
+
     TMPDIR="$(mktemp -d)" || return 1
     readonly TMPDIR
     trap 'rm -rf ${TMPDIR}' EXIT
@@ -263,18 +265,27 @@ set_lyric_file_name() {
     echo "${file%.opus}.lrc"
 }
 
-is_valid_lrc() {
+validate_lrc() {
     local file="$1"
 
-    local valid=1
+    # file does not exist, is invalid
+    if [[ ! -f "${file}" ]]; then
+        return 1
+    fi
+
+    local valid=0
     while read -r line; do
         [[ "${#line}" -eq 0 ]] && continue
-        if [[ "${line}" != '['* ]]; then
+        if [[ "${line}" != '['* && "${line}" != '#'* ]]; then
             valid=1
             break
         fi
-        valid=0
     done <"${file}"
+
+    if [[ ${valid} -eq 1 ]]; then
+        debug echo_fail "${file} is not valid lrc file"
+        dry rm "${file}" || return 1
+    fi
 
     return ${valid}
 }

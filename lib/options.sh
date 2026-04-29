@@ -10,7 +10,7 @@ OPTIONS:
   -d, --dir       process files in directory
   -r, --recurse   recursively process directory
   -f, --file      process one file
-  -n, --dry-run   do not actually add synced lyrics,
+  -n, --dry-run   do not add synced lyrics,
                   just show the files that would be processed
   -e, --eval      output bash functions that can be directly processed
                   by eval for use with testing this script.
