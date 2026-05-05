@@ -89,6 +89,8 @@ dry() {
 # check required utilities for this project
 check_required_utils() {
     local utils=(
+        mktemp
+        sort
         base64
         cat
         ffprobe

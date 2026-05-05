@@ -39,9 +39,9 @@ bash_dirname() {
     printf '%s\n' "${tmp:-/}"
 }
 
-PROGPATH="$(readlink -f "$0")"
-PROGDIR="$(bash_dirname "${PROGPATH}")"
-PROGNAME="$(bash_basename "${PROGPATH}")"
+PROGPATH="$(readlink -f "$0")" || exit 1
+PROGDIR="$(bash_dirname "${PROGPATH}")" || exit 1
+PROGNAME="$(bash_basename "${PROGPATH}")" || exit 1
 # shellcheck disable=SC2034
 readonly PROGPATH PROGDIR PROGNAME || exit 1
 

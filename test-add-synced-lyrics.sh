@@ -39,20 +39,24 @@ bash_dirname() {
     printf '%s\n' "${tmp:-/}"
 }
 
-readonly PROGPATH="$(readlink -f "$0")"
-readonly PROGDIR="$(bash_dirname "${PROGPATH}")"
-readonly PROGNAME="$(bash_basename "${PROGPATH}")"
+PROGPATH="$(readlink -f "$0")" || exit 1
+PROGDIR="$(bash_dirname "${PROGPATH}")" || exit 1
+PROGNAME="$(bash_basename "${PROGPATH}")" || exit 1
+readonly PROGPATH PROGDIR PROGNAME || exit 1
 
 # to normalize paths
 cd "${PROGDIR}"
 
 readonly TEST_DIR="test-dir"
 # lyrics exist for this song
-readonly GOOD_SONG="${TEST_DIR}/back burner.opus"
+readonly GOOD_SONG="${TEST_DIR}/the cold sun.opus"
 readonly GOOD_LYRICS="${GOOD_SONG//.opus/.lrc}"
+readonly GOOD_ISRC='TCJPF1733509'
 # lyrics do not exist for this song
 readonly BAD_SONG="${TEST_DIR}/subdir/avalanche.opus"
 readonly BAD_LYRICS="${BAD_SONG//.opus/.lrc}"
+readonly BAD_ISRC='US5261822978'
+# program to test
 readonly PROG="add-synced-lyrics.sh"
 # coverage
 readonly COVERAGE_DIR="coverage"
@@ -158,28 +162,46 @@ test_determine_inputs_recurse() {
     RECURSE=true test_determine_inputs
 }
 
-test_determine_inputs_find() {
+test_determine_inputs_bash() {
+    # TEST_ADD_BIN guaranteed to be single word
+    # shellcheck disable=SC2206
     local utils=(
+        mktemp
+        sort
         base64
         cat
         ffprobe
         jq
         librelyrics
         spotify
+        docker
+        node
+        readlink
+        bash
+        ${TEST_ADD_BIN:-}
     )
-    local path=()
+
     for util in "${utils[@]}"; do
-        path+=("$(bash_dirname "$(command -v "${util}")")")
+        test -f "${TEST_DIR}/${util}" && rm "${TEST_DIR}/${util}"
+        ln -s "$(command -v "${util}")" "${TEST_DIR}/${util}"
     done
-    IFS=':' moddedPath="${path[*]}"
-    PATH="${moddedPath}" \
+
+    PATH="${TEST_DIR}" \
         add-synced-lyrics \
         --dir "${TEST_DIR}" \
         --dry-run "$@"
 }
 
+test_determine_inputs_bash_recurse() {
+    test_determine_inputs_bash --recurse
+}
+
+test_determine_inputs_find() {
+    TEST_ADD_BIN='find' test_determine_inputs_bash
+}
+
 test_determine_inputs_find_recurse() {
-    test_determine_inputs_find --recurse
+    TEST_ADD_BIN='find' test_determine_inputs_bash_recurse
 }
 
 test_file_dry() {
@@ -251,10 +273,31 @@ test_directory_recurse_ignore() {
     return 0
 }
 
+test_not_music_file() {
+    local notMusicFile="${TEST_DIR}/dummy.txt"
+    test -f "${notMusicFile}" || touch "${notMusicFile}"
+
+    run_test_cmd \
+        1 \
+        add-synced-lyrics --file "${notMusicFile}"
+
+    [[ "${CMD_OUTPUT}" == *'is not a music file'* ]]
+}
+
 test_missing_utils() {
-    PATH="$(bash_dirname "$(command -v bash)")" run_test_cmd \
+    test -d "${TEST_DIR}" || setup_test_data
+
+    for bin in bash readlink; do
+        test -f "${TEST_DIR}/${bin}" && rm "${TEST_DIR}/${bin}"
+        ln -s "$(command -v ${bin})" "${TEST_DIR}/${bin}"
+    done
+
+    # chmod +x "${TEST_DIR}/bash"
+    PATH="${TEST_DIR}" run_test_cmd \
         1 \
         add-synced-lyrics
+
+    [[ "${CMD_OUTPUT}" == *'missing node'* ]]
 }
 
 setup_test_data() {
@@ -269,10 +312,10 @@ setup_test_data() {
         -t 5
     )
     "${ffmpegCmd[@]}" \
-        -metadata ISRC=USTN10700139 \
+        -metadata ISRC=${GOOD_ISRC} \
         "${GOOD_SONG}"
     "${ffmpegCmd[@]}" \
-        -metadata ISRC=US5261822978 \
+        -metadata ISRC=${BAD_ISRC} \
         "${BAD_SONG}"
 }
 
@@ -280,8 +323,11 @@ TESTS=(
     test_help_option
     test_determine_inputs
     test_determine_inputs_recurse
+    test_determine_inputs_bash
+    test_determine_inputs_bash_recurse
     test_determine_inputs_find
     test_determine_inputs_find_recurse
+    test_not_music_file
     test_bad_input
     test_directory_dry
     test_directory_recurse_dry
@@ -409,4 +455,5 @@ if [[ $# -eq 0 ]]; then
 else
     setup_coverage
     "$@"
+    exit $?
 fi
