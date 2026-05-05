@@ -95,6 +95,8 @@ check_required_utils() {
         jq
         librelyrics
         spotify # uv tool install --python 3.8 spotify-cli
+        docker
+        node
     )
     local missing=false
     for util in "${utils[@]}"; do
@@ -131,11 +133,13 @@ cache_command() {
     hash="$(sha256sum <<<"${cmd[*]}")" || return 1
     read -r cacheFile _ <<<"${hash}"
     cacheFilePath="${CACHE_DIR}/${cacheFile}"
-    if [[ -f "${cacheFilePath}" && ${DRY_RUN} == false ]]; then
+    if [[ -f "${cacheFilePath}" ]]; then
+        mapfile -t cmdArr <<<"${cmd[*]}"
+        local skipLines="${#cmdArr[@]}"
         mapfile -t contents <"${cacheFilePath}"
         ret=$?
-        # skip first line since it is the command
-        printf '%s\n' "${contents[@]:1}"
+        # skip N lines respective to the command length
+        printf '%s\n' "${contents[@]:${skipLines}}"
     else
         cmdOut="$(dry "${cmd[@]}")"
         ret=$?

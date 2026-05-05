@@ -56,6 +56,7 @@ process_inputs() {
         download_with_lrclib
         download_with_spotify
         download_with_deezer
+        download_with_lyricsify
     )
 
     local numInputs="${#INPUTS[@]}"
