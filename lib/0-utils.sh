@@ -89,17 +89,29 @@ dry() {
 # check required utilities for this project
 check_required_utils() {
     local utils=(
-        mktemp
+        # coreutils
+        bash
+        cat
         sort
         base64
-        cat
-        ffprobe
+        mktemp
+        readlink
+
         jq
-        librelyrics
-        spotify # uv tool install --python 3.8 spotify-cli
-        docker
         node
+        docker
+        ffmpeg
+        ffprobe
+
+        librelyrics
+        spotify
     )
+
+    if [[ "${1:-}" == '--print-required' ]]; then
+        echo "utils='${utils[*]}'"
+        return
+    fi
+
     local missing=false
     for util in "${utils[@]}"; do
         if ! have_cmd "${util}"; then
@@ -252,6 +264,7 @@ output_eval_functions() {
             "${function}" == set_default_options ]] || continue
         ${line}
     done <<<"$(declare -F)"
+    check_required_utils --print-required
 }
 
 get_file_isrc() {

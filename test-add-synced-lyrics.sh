@@ -89,7 +89,6 @@ run_test_cmd() {
     else
         return 0
     fi
-
 }
 
 test_help_option() {
@@ -163,21 +162,11 @@ test_determine_inputs_recurse() {
 }
 
 test_determine_inputs_bash() {
+    eval "$(add-synced-lyrics --eval)"
     # TEST_ADD_BIN guaranteed to be single word
     # shellcheck disable=SC2206
     local utils=(
-        mktemp
-        sort
-        base64
-        cat
-        ffprobe
-        jq
-        librelyrics
-        spotify
-        docker
-        node
-        readlink
-        bash
+        ${utils}
         ${TEST_ADD_BIN:-}
     )
 
